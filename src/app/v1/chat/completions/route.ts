@@ -1,0 +1,122 @@
+// ============================================================
+// AI API Relay — /v1/chat/completions Route Handler
+// ============================================================
+
+import { NextRequest } from 'next/server';
+import { validateAuth, relayRequest, RelayError } from '@/lib/relay';
+
+export const runtime = 'edge';
+
+/**
+ * POST /v1/chat/completions
+ *
+ * OpenAI-compatible chat completions endpoint.
+ * Routes requests to the appropriate upstream provider based on model prefix.
+ */
+export async function POST(request: NextRequest) {
+  // 1. Validate authentication
+  if (!validateAuth(request)) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: 'Invalid API key. Provide a valid key in the Authorization header.',
+          type: 'authentication_error',
+          code: 401,
+        },
+      }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // 2. Parse request body
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: 'Invalid JSON in request body.',
+          type: 'invalid_request_error',
+          code: 400,
+        },
+      }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // 3. Validate required fields
+  if (!body.model) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: 'Missing required field: model.',
+          type: 'invalid_request_error',
+          code: 400,
+        },
+      }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: 'Missing or empty required field: messages.',
+          type: 'invalid_request_error',
+          code: 400,
+        },
+      }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // 4. Relay the request
+  try {
+    const { response, provider, apiKey } = await relayRequest(body);
+
+    // 5. Stream or return the response
+    if (body.stream) {
+      // Streaming: pipe the upstream SSE stream directly
+      return new Response(response.body, {
+        status: response.status,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Relay-Provider': provider.name,
+          'X-Relay-Key': apiKey.hash,
+        },
+      });
+    } else {
+      // Non-streaming: return the full response
+      const responseBody = await response.text();
+      return new Response(responseBody, {
+        status: response.status,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Relay-Provider': provider.name,
+          'X-Relay-Key': apiKey.hash,
+        },
+      });
+    }
+  } catch (error) {
+    if (error instanceof RelayError) {
+      return error.toResponse();
+    }
+
+    // Unexpected error
+    console.error('Relay error:', error);
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: 'Internal relay error.',
+          type: 'server_error',
+          code: 500,
+        },
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
