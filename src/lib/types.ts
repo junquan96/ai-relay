@@ -34,7 +34,31 @@ export interface KeyPool {
 export interface UsageRecord {
   requests: number;
   tokens: number;                // total tokens (prompt + completion)
+  promptTokens?: number;         // prompt tokens (for trend data)
+  completionTokens?: number;     // completion tokens (for trend data)
   lastUsed: number;              // timestamp
+}
+
+/** Daily usage data point for trend charts */
+export interface DailyUsagePoint {
+  date: string;                  // YYYY-MM-DD
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/** Per-provider daily usage for trend charts */
+export interface ProviderDailyUsage {
+  provider: string;
+  data: DailyUsagePoint[];
+}
+
+/** Usage trend API response */
+export interface UsageTrendResponse {
+  range: '7d' | '30d';
+  global: DailyUsagePoint[];
+  providers: ProviderDailyUsage[];
 }
 
 /** OpenAI-compatible chat completion request */

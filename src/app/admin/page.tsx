@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import TokenTrendChart from './components/TokenTrendChart';
 
 interface ProviderInfo {
   name: string;
@@ -186,6 +187,9 @@ export default function AdminPage() {
           </div>
         </div>
       </section>
+
+      {/* Token Consumption Trend */}
+      <TokenTrendChart apiKey={apiKey} />
 
       {/* Provider Key Pools */}
       <section style={{

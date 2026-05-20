@@ -2,7 +2,7 @@
 // AI API Relay — Usage Tracking + Rate Limiting (Vercel KV)
 // ============================================================
 
-import type { UsageRecord } from './types';
+import type { UsageRecord, DailyUsagePoint, ProviderDailyUsage } from './types';
 
 /**
  * Try to get the KV client. Returns null if KV is not configured
@@ -165,7 +165,8 @@ async function incrementQuota(): Promise<void> {
  */
 export async function recordUsage(
   keyHash: string,
-  tokens: { prompt: number; completion: number }
+  tokens: { prompt: number; completion: number },
+  provider?: string
 ): Promise<void> {
   try {
     const kv = await getKV();
@@ -185,11 +186,23 @@ export async function recordUsage(
     await kv.hincrby(keyTotalKey, 'requests', 1);
     await kv.hincrby(keyTotalKey, 'tokens', totalTokens);
 
-    // Global daily usage
+    // Global daily usage (with prompt/completion split)
     const globalDailyKey = `usage:daily:${date}`;
     await kv.hincrby(globalDailyKey, 'requests', 1);
     await kv.hincrby(globalDailyKey, 'tokens', totalTokens);
+    await kv.hincrby(globalDailyKey, 'promptTokens', tokens.prompt);
+    await kv.hincrby(globalDailyKey, 'completionTokens', tokens.completion);
     await kv.expire(globalDailyKey, 86400 * 30); // 30 day TTL
+
+    // Per-provider daily usage (with prompt/completion split)
+    if (provider) {
+      const providerDailyKey = `usage:provider:${provider}:daily:${date}`;
+      await kv.hincrby(providerDailyKey, 'requests', 1);
+      await kv.hincrby(providerDailyKey, 'tokens', totalTokens);
+      await kv.hincrby(providerDailyKey, 'promptTokens', tokens.prompt);
+      await kv.hincrby(providerDailyKey, 'completionTokens', tokens.completion);
+      await kv.expire(providerDailyKey, 86400 * 30); // 30 day TTL
+    }
 
     // Increment quota counters
     await incrementQuota();
@@ -249,4 +262,80 @@ export async function getGlobalUsage(): Promise<UsageRecord | null> {
   } catch {
     return null;
   }
+}
+
+// ── Usage Trend Queries ─────────────────────────────────────
+
+/** Known provider names for trend queries */
+const PROVIDER_NAMES = ['openai', 'anthropic', 'deepseek', 'xiaomi'];
+
+/**
+ * Generate an array of date strings (YYYY-MM-DD) going back N days from today.
+ */
+function dateRange(days: number): string[] {
+  const dates: string[] = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+/**
+ * Parse a KV hash into a DailyUsagePoint for a given date.
+ */
+function parseDailyPoint(date: string, raw: Record<string, unknown> | null): DailyUsagePoint {
+  return {
+    date,
+    requests: Number(raw?.requests || 0),
+    promptTokens: Number(raw?.promptTokens || 0),
+    completionTokens: Number(raw?.completionTokens || 0),
+    totalTokens: Number(raw?.tokens || 0),
+  };
+}
+
+/**
+ * Get usage trend data for the admin dashboard.
+ * Returns global daily data and per-provider breakdown.
+ */
+export async function getUsageTrend(
+  range: '7d' | '30d'
+): Promise<{ global: DailyUsagePoint[]; providers: ProviderDailyUsage[] }> {
+  const kv = await getKV();
+  if (!kv) {
+    return { global: [], providers: [] };
+  }
+
+  const days = range === '7d' ? 7 : 30;
+  const dates = dateRange(days);
+
+  // Fetch global daily data for all dates in parallel
+  const globalPromises = dates.map(async (date) => {
+    const raw = await kv.hgetall(`usage:daily:${date}`);
+    return parseDailyPoint(date, raw as Record<string, unknown> | null);
+  });
+
+  // Fetch per-provider daily data for all dates
+  const providerPromises = PROVIDER_NAMES.map(async (provider) => {
+    const dataPromises = dates.map(async (date) => {
+      const raw = await kv.hgetall(`usage:provider:${provider}:daily:${date}`);
+      return parseDailyPoint(date, raw as Record<string, unknown> | null);
+    });
+    const data = await Promise.all(dataPromises);
+    return { provider, data };
+  });
+
+  const [global, providers] = await Promise.all([
+    Promise.all(globalPromises),
+    Promise.all(providerPromises),
+  ]);
+
+  // Filter out providers with zero usage across all days
+  const activeProviders = providers.filter((p) =>
+    p.data.some((d) => d.totalTokens > 0)
+  );
+
+  return { global, providers: activeProviders };
 }

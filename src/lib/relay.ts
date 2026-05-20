@@ -154,7 +154,7 @@ export async function relayRequest(
       // Success or client error (4xx except 429) — return as-is
       // Track usage asynchronously (non-streaming only, for streaming we'd need to parse SSE)
       if (!body.stream && upstreamResponse.ok) {
-        trackUsageAsync(currentKey, upstreamResponse.clone());
+        trackUsageAsync(currentKey, upstreamResponse.clone(), provider.name);
       }
 
       return { response: upstreamResponse, provider, apiKey: currentKey };
@@ -179,7 +179,7 @@ export async function relayRequest(
 /**
  * Track usage from a non-streaming response (async, fire-and-forget).
  */
-function trackUsageAsync(apiKey: ApiKey, response: Response): void {
+function trackUsageAsync(apiKey: ApiKey, response: Response, providerName?: string): void {
   response
     .clone()
     .json()
@@ -189,7 +189,7 @@ function trackUsageAsync(apiKey: ApiKey, response: Response): void {
         recordUsage(apiKey.hash, {
           prompt: usage.prompt_tokens || 0,
           completion: usage.completion_tokens || 0,
-        });
+        }, providerName);
       }
     })
     .catch(() => {}); // Silent fail
