@@ -77,12 +77,13 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   // ⚠️ xiaomimimo 排在 xiaomi 前面，同为 mimo- 前缀时优先匹配
   xiaomimimo: {
     name: 'xiaomimimo',
-    displayName: 'Xiaomi MiMo (SGP)',
+    displayName: 'MiMo SGP (中转)',
     baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1',
     modelPrefixes: ['mimo-'],
     headerFormat: 'azure',
     envKeyField: 'XIAOMIMIMO_SGP_KEYS',
     envBaseUrlField: 'XIAOMIMIMO_SGP_BASE_URL',
+    fallbackProvider: 'xiaomi',  // SGP 失败时 fallback 到 CN
     models: [
       { id: 'mimo-v2.5-pro', displayName: 'MiMo v2.5 Pro', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
       { id: 'mimo-v2.5-flash', displayName: 'MiMo v2.5 Flash', contextWindow: 128000, maxOutput: 16384, supportsStream: true },
@@ -90,7 +91,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   },
   xiaomi: {
     name: 'xiaomi',
-    displayName: 'Xiaomi (MiMo CN)',
+    displayName: 'MiMo CN (官方)',
     baseUrl: 'https://api.xiaomi.com/v1',
     modelPrefixes: ['mimo-'],
     headerFormat: 'openai',

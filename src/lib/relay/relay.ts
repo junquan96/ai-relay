@@ -3,8 +3,8 @@
 // ============================================================
 
 import type { ChatCompletionRequest } from '../types';
-import type { RelayResult } from '../providers/types';
-import { resolveProvider, getUpstreamUrl, resolveModelAlias } from '../providers';
+import type { RelayResult, ProviderConfig } from '../providers/types';
+import { resolveProvider, getUpstreamUrl, resolveModelAlias, PROVIDERS } from '../providers';
 import { selectKey, markCooldown, getKeyPool } from './key-pool';
 import { buildHeaders, transformToAnthropic } from './transform';
 import { RelayError } from '../errors';
@@ -53,9 +53,6 @@ export async function relayRequest(
     );
   }
 
-  // Resolve model alias
-  const resolvedModel = resolveModelAlias(body.model);
-
   // Pre-flight: check rate limiter (token bucket + circuit breaker)
   const rateLimitCheck = checkRateLimit(provider.name);
   if (!rateLimitCheck.allowed) {
@@ -76,23 +73,50 @@ export async function relayRequest(
     );
   }
 
-  const url = getUpstreamUrl(provider);
-  const isAnthropic = provider.headerFormat === 'anthropic';
-
-  // Transform request body if needed (use resolved model name)
-  // Inject stream_options.include_usage for streaming so upstream returns usage in final SSE chunk
-  const bodyWithResolvedModel: Record<string, unknown> = { ...body, model: resolvedModel };
-  if (body.stream && !isAnthropic) {
-    const existingOpts = typeof body.stream_options === 'object' && body.stream_options !== null ? body.stream_options : {};
-    bodyWithResolvedModel.stream_options = { include_usage: true, ...existingOpts };
-  }
-  const requestBody = isAnthropic ? transformToAnthropic(bodyWithResolvedModel as ChatCompletionRequest) : bodyWithResolvedModel;
+  // Resolve model alias
+  const resolvedModel = resolveModelAlias(body.model);
 
   // Retry with key rotation + exponential backoff
   const pool = getKeyPool(provider);
   const maxRetries = Math.min(pool.keys.length, 3);
+
+  // Try primary provider with retries
+  const primaryResult = await tryProviderWithRetries(provider, body, resolvedModel, apiKey, maxRetries);
+  if (primaryResult.result) {
+    return primaryResult.result;
+  }
+
+  // If primary provider failed and has a fallback, try the fallback provider
+  if (provider.fallbackProvider) {
+    const fallbackProvider = PROVIDERS[provider.fallbackProvider];
+    if (fallbackProvider) {
+      console.log(`Primary provider ${provider.displayName} failed, trying fallback: ${fallbackProvider.displayName}`);
+      const fallbackResult = await tryProviderWithRetries(fallbackProvider, body, resolvedModel, apiKey, maxRetries);
+      if (fallbackResult.result) {
+        return fallbackResult.result;
+      }
+    }
+  }
+
+  throw new RelayError(
+    `All retry attempts failed for ${provider.displayName}${provider.fallbackProvider ? ` and fallback ${provider.fallbackProvider}` : ''}: ${primaryResult.lastError?.message}`,
+    'server_error',
+    502
+  );
+}
+
+/**
+ * Try a provider with retries. Returns RelayResult on success, null if all retries failed.
+ */
+async function tryProviderWithRetries(
+  provider: ProviderConfig,
+  body: ChatCompletionRequest,
+  resolvedModel: string,
+  initialKey: ReturnType<typeof selectKey>,
+  maxRetries: number
+): Promise<{ result: RelayResult | null; lastError: Error | null }> {
+  let currentKey = initialKey;
   let lastError: Error | null = null;
-  let currentKey = apiKey;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     // Exponential backoff between retries (skip on first attempt)
@@ -103,12 +127,30 @@ export async function relayRequest(
     // Re-check circuit breaker before each attempt
     const retryCheck = checkRateLimit(provider.name);
     if (!retryCheck.allowed) {
-      throw new RelayError(
-        retryCheck.reason || 'Rate limit exceeded',
-        'rate_limit_error',
-        429
-      );
+      lastError = new Error(retryCheck.reason || 'Rate limit exceeded');
+      continue;
     }
+
+    // Select an API key if needed
+    if (!currentKey) {
+      currentKey = selectKey(provider);
+      if (!currentKey) {
+        lastError = new Error(`No API keys configured for provider: ${provider.displayName}`);
+        continue;
+      }
+    }
+
+    const url = getUpstreamUrl(provider);
+    const isAnthropic = provider.headerFormat === 'anthropic';
+
+    // Transform request body if needed (use resolved model name)
+    // Inject stream_options.include_usage for streaming so upstream returns usage in final SSE chunk
+    const bodyWithResolvedModel: Record<string, unknown> = { ...body, model: resolvedModel };
+    if (body.stream && !isAnthropic) {
+      const existingOpts = typeof body.stream_options === 'object' && body.stream_options !== null ? body.stream_options : {};
+      bodyWithResolvedModel.stream_options = { include_usage: true, ...existingOpts };
+    }
+    const requestBody = isAnthropic ? transformToAnthropic(bodyWithResolvedModel as ChatCompletionRequest) : bodyWithResolvedModel;
 
     const startTime = Date.now();
     try {
@@ -130,7 +172,8 @@ export async function relayRequest(
           currentKey = nextKey;
           continue;
         }
-        return { response: upstreamResponse, provider, apiKey: currentKey };
+        lastError = new Error('Rate limited by upstream');
+        continue;
       }
 
       // 401/403 → key invalid/expired, rotate to next key
@@ -142,7 +185,8 @@ export async function relayRequest(
           currentKey = nextKey;
           continue;
         }
-        return { response: upstreamResponse, provider, apiKey: currentKey };
+        lastError = new Error('Auth failed — key invalid or expired');
+        continue;
       }
 
       // 5xx → try next key (but don't count as 429 for circuit breaker)
@@ -154,7 +198,8 @@ export async function relayRequest(
           currentKey = nextKey;
           continue;
         }
-        return { response: upstreamResponse, provider, apiKey: currentKey };
+        lastError = new Error('Upstream server error');
+        continue;
       }
 
       // Success → record in rate limiter
@@ -163,7 +208,7 @@ export async function relayRequest(
       // NOTE: Usage tracking is done in the route handler, not here.
       // This avoids double-counting for non-streaming responses.
 
-      return { response: upstreamResponse, provider, apiKey: currentKey };
+      return { result: { response: upstreamResponse, provider, apiKey: currentKey }, lastError };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       markCooldown(currentKey);
@@ -175,9 +220,5 @@ export async function relayRequest(
     }
   }
 
-  throw new RelayError(
-    `All retry attempts failed for ${provider.displayName}: ${lastError?.message}`,
-    'server_error',
-    502
-  );
+  return { result: null, lastError };
 }
