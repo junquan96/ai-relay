@@ -91,20 +91,32 @@ export async function relayRequest(
     const fallbackProvider = PROVIDERS[provider.fallbackProvider];
     if (fallbackProvider) {
       console.log(`Primary provider ${provider.displayName} failed, trying fallback: ${fallbackProvider.displayName}`);
-      // BUG FIX: Do NOT pass primary's apiKey to fallback — each provider has its own key pool.
-      // Also use fallback's own pool size for maxRetries.
       const fallbackKey = selectKey(fallbackProvider);
+      if (!fallbackKey) {
+        console.warn(`[fallback] ${fallbackProvider.displayName} has no API keys (env: ${fallbackProvider.envKeyField})`);
+      }
       const fallbackPool = getKeyPool(fallbackProvider);
       const fallbackMaxRetries = Math.min(fallbackPool.keys.length, 3);
+      if (fallbackMaxRetries === 0) {
+        console.warn(`[fallback] ${fallbackProvider.displayName} pool is empty, skipping fallback attempts`);
+      }
       const fallbackResult = await tryProviderWithRetries(fallbackProvider, body, resolvedModel, fallbackKey, fallbackMaxRetries);
       if (fallbackResult.result) {
         return fallbackResult.result;
       }
+      // Include both primary and fallback errors in the message
+      const primaryErr = primaryResult.lastError?.message || 'unknown error';
+      const fallbackErr = fallbackResult.lastError?.message || 'unknown error';
+      throw new RelayError(
+        `All retries failed — ${provider.displayName}: ${primaryErr}; fallback ${fallbackProvider.displayName}: ${fallbackErr}`,
+        'server_error',
+        502
+      );
     }
   }
 
   throw new RelayError(
-    `All retry attempts failed for ${provider.displayName}${provider.fallbackProvider ? ` and fallback ${provider.fallbackProvider}` : ''}: ${primaryResult.lastError?.message}`,
+    `All retry attempts failed for ${provider.displayName}: ${primaryResult.lastError?.message || 'unknown error'}`,
     'server_error',
     502
   );
@@ -172,12 +184,12 @@ async function tryProviderWithRetries(
         record429(provider.name);
         markCooldown(currentKey);
         recordError(provider.name, currentKey.hash, 429, 'Rate limited by upstream');
+        lastError = new Error('Rate limited by upstream');
         const nextKey = selectKey(provider);
         if (nextKey && nextKey.hash !== currentKey.hash) {
           currentKey = nextKey;
           continue;
         }
-        lastError = new Error('Rate limited by upstream');
         continue;
       }
 
@@ -185,12 +197,12 @@ async function tryProviderWithRetries(
       if (upstreamResponse.status === 401 || upstreamResponse.status === 403) {
         markCooldown(currentKey);
         recordError(provider.name, currentKey.hash, upstreamResponse.status, 'Auth failed — key invalid or expired');
+        lastError = new Error('Auth failed — key invalid or expired');
         const nextKey = selectKey(provider);
         if (nextKey && nextKey.hash !== currentKey.hash) {
           currentKey = nextKey;
           continue;
         }
-        lastError = new Error('Auth failed — key invalid or expired');
         continue;
       }
 
@@ -198,12 +210,12 @@ async function tryProviderWithRetries(
       if (upstreamResponse.status >= 500) {
         markCooldown(currentKey);
         recordError(provider.name, currentKey.hash, upstreamResponse.status, 'Upstream server error');
+        lastError = new Error(`Upstream server error (HTTP ${upstreamResponse.status})`);
         const nextKey = selectKey(provider);
         if (nextKey && nextKey.hash !== currentKey.hash) {
           currentKey = nextKey;
           continue;
         }
-        lastError = new Error('Upstream server error');
         continue;
       }
 
