@@ -260,6 +260,24 @@ Push daily usage reports and quota alerts via Webhooks.
 | **Cost Optimization** | Virtual model mapping routes tasks to cheaper providers |
 | **Enterprise Internal** | API gateway + webhook alerts for usage monitoring |
 
+
+
+## 👥 Team
+
+<!-- Format rules (delete after submitting):
+Format for each member:
+### Name
+- **Role**: Your role
+- **Contribution**: Your core work (1-2 sentences)
+- **Contact**: Email
+
+Notes:
+1. Use your real name or commonly used name
+2. Use izmw.me corporate email
+3. Be specific about contributions
+4. Commit with your own git identity (name + email)
+-->
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
