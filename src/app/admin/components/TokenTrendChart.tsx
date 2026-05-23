@@ -202,9 +202,18 @@ export default function TokenTrendChart({ apiKey, lang = 'zh' }: TokenTrendChart
     return provider?.data || [];
   })();
 
-  // Available providers (including 'all')
+  // Available providers (including 'all', sorted by consumption volume descending)
   const availableProviders = data
-    ? ['all', ...data.providers.map((p) => p.provider)]
+    ? [
+        'all',
+        ...[...data.providers]
+          .map((p) => ({
+            provider: p.provider,
+            totalTokens: p.data.reduce((sum, d) => sum + d.totalTokens, 0),
+          }))
+          .sort((a, b) => b.totalTokens - a.totalTokens)
+          .map((p) => p.provider),
+      ]
     : ['all'];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
