@@ -88,8 +88,11 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       'mimo-v2.5-pro-coding': 'mimo-v2.5-pro',
       'mimo-v2.5-pro-sgp': 'mimo-v2.5-pro',
       'mimo-v2.5-flash-sgp': 'mimo-v2.5-flash',
+      'mimo-v2.5-coding': 'mimo-v2.5',
+      'mimo-v2.5-sgp': 'mimo-v2.5',
     },
     models: [
+      { id: 'mimo-v2.5', displayName: 'MiMo v2.5', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
       { id: 'mimo-v2.5-pro', displayName: 'MiMo v2.5 Pro', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
     ],
   },
@@ -97,15 +100,17 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'xiaomi_sgp_coding',
     displayName: 'MiMo SGP (Coding Plan)',
     baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1',
-    modelPrefixes: ['mimo-v2.5-pro-sgp', 'mimo-v2.5-flash-sgp'],
+    modelPrefixes: ['mimo-v2.5-pro-sgp', 'mimo-v2.5-flash-sgp', 'mimo-v2.5-sgp'],
     headerFormat: 'azure',
     envKeyField: 'XIAOMIMIMO_SGP_CODING_KEYS',
     envBaseUrlField: 'XIAOMIMIMO_SGP_CODING_BASE_URL',
     modelMapping: {
       'mimo-v2.5-pro-sgp': 'mimo-v2.5-pro',
       'mimo-v2.5-flash-sgp': 'mimo-v2.5-flash',
+      'mimo-v2.5-sgp': 'mimo-v2.5',
     },
     models: [
+      { id: 'mimo-v2.5-sgp', displayName: 'MiMo v2.5 (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
       { id: 'mimo-v2.5-pro-sgp', displayName: 'MiMo v2.5 Pro (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
       { id: 'mimo-v2.5-flash-sgp', displayName: 'MiMo v2.5 Flash (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true },
     ],
@@ -114,14 +119,16 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'xiaomi_coding',
     displayName: 'MiMo (Coding Plan)',
     baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
-    modelPrefixes: ['mimo-v2.5-pro-coding'],
+    modelPrefixes: ['mimo-v2.5-pro-coding', 'mimo-v2.5-coding'],
     headerFormat: 'openai',
     envKeyField: 'XIAOMI_CODING_KEYS',
     envBaseUrlField: 'XIAOMI_CODING_BASE_URL',
     modelMapping: {
       'mimo-v2.5-pro-coding': 'mimo-v2.5-pro',
+      'mimo-v2.5-coding': 'mimo-v2.5',
     },
     models: [
+      { id: 'mimo-v2.5-coding', displayName: 'MiMo v2.5 (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
       { id: 'mimo-v2.5-pro-coding', displayName: 'MiMo v2.5 Pro (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
     ],
   },
@@ -134,6 +141,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     envKeyField: 'XIAOMI_TUDO_KEYS',
     envBaseUrlField: 'XIAOMI_TUDO_BASE_URL',
     models: [
+      { id: 'mimo-v2.5', displayName: 'MiMo-v2.5', contextWindow: 1048576, maxOutput: 32000, supportsStream: true },
       { id: 'mimo-v2.5-pro', displayName: 'MiMo-v2.5-Pro', contextWindow: 1048576, maxOutput: 32000, supportsStream: true }
     ],
   },

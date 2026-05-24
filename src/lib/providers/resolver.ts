@@ -159,15 +159,27 @@ export async function resolveFallbackModel(originalModel: string, targetProvider
       ) {
         return 'mimo-v2.5-flash-sgp';
       }
+      if (lowerModel.includes('mimo-v2.5') && !lowerModel.includes('pro')) {
+        return 'mimo-v2.5-sgp';
+      }
       return 'mimo-v2.5-pro-sgp';
 
     case 'xiaomi':
+      if (lowerModel.includes('mimo-v2.5') && !lowerModel.includes('pro')) {
+        return 'mimo-v2.5';
+      }
       return 'mimo-v2.5-pro';
 
     case 'xiaomi_coding':
+      if (lowerModel.includes('mimo-v2.5') && !lowerModel.includes('pro')) {
+        return 'mimo-v2.5-coding';
+      }
       return 'mimo-v2.5-pro-coding';
 
     case 'xiaomi_tudo':
+      if (lowerModel.includes('mimo-v2.5') && !lowerModel.includes('pro')) {
+        return 'mimo-v2.5';
+      }
       return 'mimo-v2.5-pro';
 
     case 'openai':
