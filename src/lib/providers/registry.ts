@@ -92,8 +92,8 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       'mimo-v2.5-sgp': 'mimo-v2.5',
     },
     models: [
-      { id: 'mimo-v2.5', displayName: 'MiMo v2.5', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
-      { id: 'mimo-v2.5-pro', displayName: 'MiMo v2.5 Pro', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
+      { id: 'mimo-v2.5', displayName: 'MiMo v2.5', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'mimo-v2.5-pro', displayName: 'MiMo v2.5 Pro', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
     ],
   },
   xiaomi_sgp_coding: {
@@ -110,9 +110,9 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       'mimo-v2.5-sgp': 'mimo-v2.5',
     },
     models: [
-      { id: 'mimo-v2.5-sgp', displayName: 'MiMo v2.5 (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
-      { id: 'mimo-v2.5-pro-sgp', displayName: 'MiMo v2.5 Pro (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
-      { id: 'mimo-v2.5-flash-sgp', displayName: 'MiMo v2.5 Flash (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true },
+      { id: 'mimo-v2.5-sgp', displayName: 'MiMo v2.5 (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'mimo-v2.5-pro-sgp', displayName: 'MiMo v2.5 Pro (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'mimo-v2.5-flash-sgp', displayName: 'MiMo v2.5 Flash (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true },
     ],
   },
   xiaomi_coding: {
@@ -128,8 +128,8 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       'mimo-v2.5-coding': 'mimo-v2.5',
     },
     models: [
-      { id: 'mimo-v2.5-coding', displayName: 'MiMo v2.5 (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
-      { id: 'mimo-v2.5-pro-coding', displayName: 'MiMo v2.5 Pro (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsTools: true },
+      { id: 'mimo-v2.5-coding', displayName: 'MiMo v2.5 (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'mimo-v2.5-pro-coding', displayName: 'MiMo v2.5 Pro (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
     ],
   },
   xiaomi_tudo: {
@@ -141,8 +141,8 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     envKeyField: 'XIAOMI_TUDO_KEYS',
     envBaseUrlField: 'XIAOMI_TUDO_BASE_URL',
     models: [
-      { id: 'mimo-v2.5', displayName: 'MiMo-v2.5', contextWindow: 1048576, maxOutput: 32000, supportsStream: true },
-      { id: 'mimo-v2.5-pro', displayName: 'MiMo-v2.5-Pro', contextWindow: 1048576, maxOutput: 32000, supportsStream: true }
+      { id: 'mimo-v2.5', displayName: 'MiMo-v2.5', contextWindow: 1048576, maxOutput: 32000, supportsStream: true, supportsVision: true },
+      { id: 'mimo-v2.5-pro', displayName: 'MiMo-v2.5-Pro', contextWindow: 1048576, maxOutput: 32000, supportsStream: true, supportsVision: true }
     ],
   },
 };
