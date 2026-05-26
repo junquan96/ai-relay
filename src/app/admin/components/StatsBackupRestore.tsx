@@ -63,15 +63,15 @@ export default function StatsBackupRestore({ apiKey, lang, t, onRefreshData }: S
       const data = await res.json();
 
       // Trigger download
-      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-        JSON.stringify(data, null, 2)
-      )}`;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('href', url);
       downloadAnchor.setAttribute('download', `ai-relay-stats-backup-${startDate}-to-${endDate}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      URL.revokeObjectURL(url);
 
       setMessage({
         text: lang === 'zh' 

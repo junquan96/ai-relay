@@ -144,6 +144,84 @@ describe('Vercel KV Backup & Restore Tests', () => {
 
     await expect(importBackupData(invalidBackup)).rejects.toThrow('Invalid backup version or format');
   });
+
+  it('should validate customProviders schema during import and skip invalid ones', async () => {
+    const backupWithInvalidProviders = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      customProviders: {
+        valid_provider: {
+          name: 'valid_provider',
+          displayName: 'Valid Provider',
+          baseUrl: 'https://example.com/v1',
+          headerFormat: 'openai',
+          modelPrefixes: ['valid-'],
+        },
+        invalid_provider_no_prefix: {
+          name: 'invalid_provider_no_prefix',
+          displayName: 'Invalid Provider',
+          baseUrl: 'https://example.com/v1',
+          headerFormat: 'openai',
+          modelPrefixes: [], // Empty prefix should fail validation
+        },
+        invalid_provider_not_array: {
+          name: 'invalid_provider_not_array',
+          displayName: 'Invalid Provider',
+          baseUrl: 'https://example.com/v1',
+          headerFormat: 'openai',
+          modelPrefixes: 'not-an-array', // String should fail validation
+        },
+        invalid_provider_bad_url: {
+          name: 'invalid_provider_bad_url',
+          displayName: 'Invalid Provider',
+          baseUrl: 'http://insecure.com/v1', // http instead of https should fail
+          headerFormat: 'openai',
+          modelPrefixes: ['bad-'],
+        }
+      }
+    };
+
+    await importBackupData(backupWithInvalidProviders);
+
+    const restoredProviders = await getCustomProviders(true);
+    expect(restoredProviders['valid_provider']).toBeDefined();
+    expect(restoredProviders['invalid_provider_no_prefix']).toBeUndefined();
+    expect(restoredProviders['invalid_provider_not_array']).toBeUndefined();
+    expect(restoredProviders['invalid_provider_bad_url']).toBeUndefined();
+  });
+
+  it('should prevent destructive overwrites when properties are missing in backup (partial restore)', async () => {
+    // 1. Seed some priority rules and model aliases first
+    await saveModelAliasConfig({
+      aliases: { 'preserve-alias': 'gpt-5.4' },
+      hidden: [],
+    });
+    await savePriorityRules([
+      {
+        id: 'preserve-rule',
+        modelPattern: 'gpt-5*',
+        providerOrder: ['openai'],
+        active: true,
+      },
+    ]);
+
+    // 2. Perform a partial import that doesn't contain priorityRules or modelAliases keys at all
+    const partialBackup = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      customProviders: {},
+      // priorityRules and modelAliases are NOT present in this payload
+    };
+    
+    await importBackupData(partialBackup);
+
+    // 3. Verify that the seeded rules and aliases are preserved (not cleared!)
+    const restoredAliases = await getModelAliasConfig(true);
+    expect(restoredAliases.aliases['preserve-alias']).toBe('gpt-5.4');
+
+    const restoredRules = await getPriorityRules(true);
+    expect(restoredRules[0].id).toBe('preserve-rule');
+  });
 });
 
 describe('Statistics Backup & Restore Tests', () => {
