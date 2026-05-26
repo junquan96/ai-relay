@@ -2,7 +2,7 @@
   "version": 2,
   "framework": "nextjs",
   "crons": [
-    { "path": "/api/cron/probe", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/probe", "schedule": "0 0 * * *" },
     { "path": "/api/cron/usage", "schedule": "5 0 * * *" }
   ]
 }
