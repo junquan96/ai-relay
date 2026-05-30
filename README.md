@@ -156,15 +156,28 @@ curl -X POST https://你的项目.vercel.app/v1/chat/completions \
 | `CRON_SECRET` | Cron 任务鉴权密钥（自定义强密码） |
 | `CF_PAGES` | 固定填 `1`（告知应用使用 CF 存储） |
 
-**第 3 步 — 推送触发部署**
+**第 3 步 — 手动创建 D1 数据库和 KV namespace**
+
+在本地用 wrangler CLI 创建资源（只需一次）：
+
+```bash
+# 创建 D1 数据库，记录输出的 database_id
+npx wrangler d1 create ai-relay
+
+# 创建 KV namespace，记录输出的 id
+npx wrangler kv namespace create ai-relay
+```
+
+将 `database_id` 和 `id` 填入 `wrangler.toml` 对应字段，然后在 Cloudflare Pages 项目的 **Settings → Functions** 中绑定（binding 名称必须为 `DB` 和 `KV`）。
+
+**第 4 步 — 推送触发部署**
 
 推送到 `main` 分支，GitHub Actions 会自动：
 1. 构建 Next.js 应用（`@cloudflare/next-on-pages`）
-2. 创建 D1 数据库并执行 migrations
-3. 创建 KV namespace
-4. 部署到 Cloudflare Pages
+2. 执行 D1 migrations（建表，幂等）
+3. 部署到 Cloudflare Pages
 
-> **存储说明：** CF 部署使用 Cloudflare KV（配置数据）+ D1（用量统计），免费层 D1 写入 10 万行/天，约支持 3-5 万次 AI 请求/天。
+> **存储说明：** CF 部署使用 Cloudflare KV（配置数据）+ D1（用量统计）。免费层限制：D1 写入 10 万行/天（约支持 3–5 万次 AI 请求/天），KV 写入 1,000 次/天（仅用于配置变更，正常使用不会触及上限）。开启 quota 检查时每次请求写一行 D1，高并发场景请关注用量。
 
 </details>
 
