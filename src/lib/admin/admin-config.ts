@@ -1424,11 +1424,43 @@ export async function importStatsData(payload: Record<string, any>): Promise<voi
     pipeline.expire(`quota:monthly:${month}`, 35 * 24 * 60 * 60); // 35 days standard TTL
   }
 
-  // Restore daily reports
-  for (const [date, val] of Object.entries(dailyReports)) {
+  // Restore daily reports — if dailyReports is empty but usageDaily has data,
+  // synthesize reports from raw usage so the chart has something to display.
+  const reportsToWrite: Record<string, object> = { ...dailyReports };
+  for (const [date, raw] of Object.entries(usageDaily as Record<string, any>)) {
+    if (reportsToWrite[date]) continue; // prefer explicit report if present
+    if (!raw || typeof raw !== 'object') continue;
+    const byProvider: Record<string, object> = {};
+    const providerData = (usageProviderDaily as Record<string, Record<string, any>>);
+    for (const [provider, datesData] of Object.entries(providerData)) {
+      const pRaw = datesData?.[date];
+      if (pRaw && typeof pRaw === 'object' && Object.keys(pRaw).length > 0) {
+        byProvider[provider] = {
+          requests: Number(pRaw.requests ?? 0),
+          tokens: Number(pRaw.tokens ?? 0),
+          promptTokens: Number(pRaw.promptTokens ?? 0),
+          completionTokens: Number(pRaw.completionTokens ?? 0),
+        };
+      }
+    }
+    reportsToWrite[date] = {
+      date,
+      summary: {
+        totalRequests: Number(raw.requests ?? 0),
+        totalTokens: Number(raw.tokens ?? 0),
+        promptTokens: Number(raw.promptTokens ?? 0),
+        completionTokens: Number(raw.completionTokens ?? 0),
+        errorRate: 0,
+        p95LatencyMs: null,
+      },
+      byProvider,
+      topModels: [],
+    };
+  }
+  for (const [date, val] of Object.entries(reportsToWrite)) {
     if (val && typeof val === 'object') {
       pipeline.set(`relay:report:daily:${date}`, JSON.stringify(val));
-      pipeline.expire(`relay:report:daily:${date}`, 30 * 24 * 60 * 60); // 30 days standard TTL
+      pipeline.expire(`relay:report:daily:${date}`, 30 * 24 * 60 * 60);
     }
   }
 
