@@ -32,21 +32,18 @@ jobs:
             echo "Visit: https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
-
           if [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
             echo "❌ Error: CLOUDFLARE_ACCOUNT_ID is not set"
             echo "Please add it in Settings → Secrets and variables → Actions"
             echo "Visit: https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
-
           if [ -z "${{ secrets.RELAY_API_KEY }}" ]; then
             echo "❌ Error: RELAY_API_KEY is not set"
             echo "Please add it in Settings → Secrets and variables → Actions"
             echo "Visit: https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
-
           echo "✅ All required secrets are configured"
 
       - name: Provision Cloudflare resources
@@ -58,7 +55,8 @@ jobs:
 
           # ─── D1 Database ───────────────────────────────────────────
           echo "=== Provisioning D1 database ==="
-          DATABASE_ID=$(pnpm exec wrangler d1 list --json | jq -r '.[] | select(.name == "ai-relay") | .uuid' || echo "")
+          DATABASE_ID=$(pnpm exec wrangler d1 list --json 2>/dev/null \
+            | jq -r '.[] | select(.name == "ai-relay") | .uuid' || echo "")
 
           if [ -z "$DATABASE_ID" ] || [ "$DATABASE_ID" = "null" ]; then
             echo "Creating D1 database: ai-relay"
@@ -85,32 +83,24 @@ jobs:
           echo ""
           echo "=== Provisioning KV namespace ==="
 
-          # wrangler kv namespace list outputs JSON by default (--json is NOT supported)
+          # wrangler kv namespace list outputs JSON by default
           KV_LIST=$(pnpm exec wrangler kv namespace list 2>/dev/null || echo "[]")
           echo "KV namespaces found: $(echo "$KV_LIST" | jq 'length' 2>/dev/null || echo 'unknown')"
 
-          # Search for existing namespace — title format is "<worker_name>-<binding>"
-          # Check all possible titles from current and previous workflow versions
-          KV_ID=""
-          for TITLE in "ai-relay-KV" "ai-relay" "ai-relay-ai-relay"; do
-            FOUND=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"${TITLE}\") | .id" 2>/dev/null || echo "")
-            if [ -n "$FOUND" ] && [ "$FOUND" != "null" ]; then
-              KV_ID="$FOUND"
-              echo "Found existing KV namespace: title=${TITLE}, id=${KV_ID}"
-              break
-            fi
-          done
+          # Search for existing namespace (title == "KV")
+          KV_ID=$(echo "$KV_LIST" | jq -r '.[] | select(.title == "KV") | .id' 2>/dev/null | head -n1)
 
-          if [ -z "$KV_ID" ]; then
+          if [ -z "$KV_ID" ] || [ "$KV_ID" = "null" ]; then
             echo "No existing KV namespace found, creating one..."
-            # Use binding name "KV" → title becomes "ai-relay-KV"
+            # Use binding name "KV" → title becomes "KV"
             KV_OUTPUT=$(pnpm exec wrangler kv namespace create KV 2>&1 || true)
             echo "$KV_OUTPUT"
-            # Extract id: try JSON first, then regex fallback
             KV_ID=$(echo "$KV_OUTPUT" | jq -r '.id' 2>/dev/null || echo "")
             if [ -z "$KV_ID" ] || [ "$KV_ID" = "null" ]; then
               KV_ID=$(echo "$KV_OUTPUT" | grep -oE '[0-9a-f]{32}' | head -1 || echo "")
             fi
+          else
+            echo "Found existing KV namespace: title=KV, id=${KV_ID}"
           fi
 
           echo "KV namespace id: $KV_ID"
@@ -189,6 +179,7 @@ jobs:
           if [ -f ".open-next/worker.js" ]; then
             mv .open-next/worker.js .open-next/_worker.js
           fi
+
           # Tell Cloudflare Pages to serve the prerendered pages directly from CDN.
           echo '{"version":1,"include":["/*"],"exclude":["/","/admin","/_next/static/*","/favicon.ico","/*.png","/*.ico","/*.txt","/*.svg"]}' > .open-next/_routes.json
 
@@ -247,14 +238,13 @@ jobs:
         run: |
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}"
           export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
-
           # 动态遍历环境变量中所有以 SYNC_ 开头的变量并推送到 CF Pages
           for var_name in $(env | grep -oE '^SYNC_[A-Z0-9_]+' | sort -u); do
             # 提取原变量名
             target_name="${var_name#SYNC_}"
             # 获取变量的值
             val="${!var_name}"
-            
+           
             if [ -n "$val" ]; then
               echo "Syncing $target_name..."
               echo "$val" | pnpm exec wrangler pages secret put "$target_name" --project-name=ai-relay
