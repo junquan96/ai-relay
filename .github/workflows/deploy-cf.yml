@@ -28,16 +28,19 @@ jobs:
         run: |
           if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
             echo "❌ Error: CLOUDFLARE_API_TOKEN is not set"
+            echo "Please add it in Settings → Secrets and variables → Actions"
             exit 1
           fi
 
           if [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
             echo "❌ Error: CLOUDFLARE_ACCOUNT_ID is not set"
+            echo "Please add it in Settings → Secrets and variables → Actions"
             exit 1
           fi
 
           if [ -z "${{ secrets.RELAY_API_KEY }}" ]; then
             echo "❌ Error: RELAY_API_KEY is not set"
+            echo "Please add it in Settings → Secrets and variables → Actions"
             exit 1
           fi
 
@@ -50,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ─── D1 Database ──────────────────────────────────────────
+          # ─── D1 Database ───────────────────────────────────────────
           echo "=== Provisioning D1 database ==="
 
           DATABASE_ID=$(pnpm exec wrangler d1 list --json 2>/dev/null \
@@ -58,10 +61,8 @@ jobs:
 
           if [ -z "$DATABASE_ID" ] || [ "$DATABASE_ID" = "null" ]; then
             echo "Creating D1 database: ai-relay"
-
             CREATE_OUTPUT=$(pnpm exec wrangler d1 create ai-relay)
             echo "$CREATE_OUTPUT"
-
             DATABASE_ID=$(echo "$CREATE_OUTPUT" \
               | sed -nE 's/.*database_id[[:space:]"=:]*"([^"]+)".*/\1/p' \
               | head -n1)
@@ -87,7 +88,7 @@ jobs:
           echo ""
           echo "=== Provisioning KV namespace ==="
 
-          # 不使用 --json，避免兼容性问题
+          # 不使用 --json，避免 wrangler 输出 help text
           KV_LIST=$(pnpm exec wrangler kv namespace list 2>/dev/null || echo "")
 
           echo "KV list output (first 15 lines):"
@@ -97,7 +98,6 @@ jobs:
 
           # 尝试常见 title 格式
           for TITLE in "KV" "ai-relay-KV" "ai-relay"; do
-            # 从文本输出中提取 32 位 ID
             FOUND=$(echo "$KV_LIST" | grep -A 5 -B 5 "title.*${TITLE}" | grep -oE '[0-9a-f]{32}' | head -n1 || echo "")
             if [ -n "$FOUND" ]; then
               KV_ID="$FOUND"
@@ -110,7 +110,6 @@ jobs:
             echo "No existing KV namespace found, creating one..."
             CREATE_OUTPUT=$(pnpm exec wrangler kv namespace create KV 2>&1)
             echo "$CREATE_OUTPUT"
-
             KV_ID=$(echo "$CREATE_OUTPUT" | grep -oE '[0-9a-f]{32}' | head -n1 || echo "")
           fi
 
@@ -152,7 +151,6 @@ jobs:
           fi
 
           CACHE_DIR="$(find .open-next/cache -mindepth 1 -maxdepth 1 -type d | head -1)"
-
           if [ -z "$CACHE_DIR" ]; then
             echo "❌ No OpenNext cache directory found"
             exit 1
@@ -203,3 +201,50 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           pnpm exec wrangler pages deploy .open-next --project-name=ai-relay
+
+      - name: Configure environment variables
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SYNC_RELAY_API_KEY: ${{ secrets.RELAY_API_KEY || vars.RELAY_API_KEY }}
+          SYNC_RELAY_ADMIN_KEY: ${{ secrets.RELAY_ADMIN_KEY || vars.RELAY_ADMIN_KEY }}
+          SYNC_RELAY_SIGNING_SECRET: ${{ secrets.RELAY_SIGNING_SECRET || vars.RELAY_SIGNING_SECRET }}
+          SYNC_CRON_SECRET: ${{ secrets.CRON_SECRET || vars.CRON_SECRET }}
+          SYNC_OPENAI_KEYS: ${{ secrets.OPENAI_KEYS || vars.OPENAI_KEYS }}
+          SYNC_CLAUDE_KEYS: ${{ secrets.CLAUDE_KEYS || vars.CLAUDE_KEYS }}
+          SYNC_DEEPSEEK_KEYS: ${{ secrets.DEEPSEEK_KEYS || vars.DEEPSEEK_KEYS }}
+          SYNC_XIAOMI_KEYS: ${{ secrets.XIAOMI_KEYS || vars.XIAOMI_KEYS }}
+          SYNC_XIAOMI_CODING_KEYS: ${{ secrets.XIAOMI_CODING_KEYS || vars.XIAOMI_CODING_KEYS }}
+          SYNC_XIAOMIMIMO_SGP_CODING_KEYS: ${{ secrets.XIAOMIMIMO_SGP_CODING_KEYS || vars.XIAOMIMIMO_SGP_CODING_KEYS }}
+          SYNC_OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || vars.OPENAI_BASE_URL }}
+          SYNC_CLAUDE_BASE_URL: ${{ secrets.CLAUDE_BASE_URL || vars.CLAUDE_BASE_URL }}
+          SYNC_DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL || vars.DEEPSEEK_BASE_URL }}
+          SYNC_XIAOMI_BASE_URL: ${{ secrets.XIAOMI_BASE_URL || vars.XIAOMI_BASE_URL }}
+          SYNC_XIAOMI_CODING_BASE_URL: ${{ secrets.XIAOMI_CODING_BASE_URL || vars.XIAOMI_CODING_BASE_URL }}
+          SYNC_XIAOMIMIMO_SGP_CODING_BASE_URL: ${{ secrets.XIAOMIMIMO_SGP_CODING_BASE_URL || vars.XIAOMIMIMO_SGP_CODING_BASE_URL }}
+          SYNC_RELAY_DAILY_LIMIT: ${{ secrets.RELAY_DAILY_LIMIT || vars.RELAY_DAILY_LIMIT }}
+          SYNC_RELAY_MONTHLY_LIMIT: ${{ secrets.RELAY_MONTHLY_LIMIT || vars.RELAY_MONTHLY_LIMIT }}
+          SYNC_RELAY_MAX_CONCURRENT: ${{ secrets.RELAY_MAX_CONCURRENT || vars.RELAY_MAX_CONCURRENT }}
+          SYNC_RELAY_MAX_QUEUE: ${{ secrets.RELAY_MAX_QUEUE || vars.RELAY_MAX_QUEUE }}
+          SYNC_RELAY_KEY_POOL_VERSION_CHECK_TTL_MS: ${{ secrets.RELAY_KEY_POOL_VERSION_CHECK_TTL_MS || vars.RELAY_KEY_POOL_VERSION_CHECK_TTL_MS }}
+          SYNC_RELAY_KV_KEY_USAGE_MODE: ${{ secrets.RELAY_KV_KEY_USAGE_MODE || vars.RELAY_KV_KEY_USAGE_MODE }}
+          SYNC_RELAY_KV_USAGE_SAMPLE_RATE: ${{ secrets.RELAY_KV_USAGE_SAMPLE_RATE || vars.RELAY_KV_USAGE_SAMPLE_RATE }}
+          SYNC_RELAY_KV_KEY_USAGE_SAMPLE_RATE: ${{ secrets.RELAY_KV_KEY_USAGE_SAMPLE_RATE || vars.RELAY_KV_KEY_USAGE_SAMPLE_RATE }}
+          SYNC_RELAY_KV_ERROR_DETAIL_SAMPLE_RATE: ${{ secrets.RELAY_KV_ERROR_DETAIL_SAMPLE_RATE || vars.RELAY_KV_ERROR_DETAIL_SAMPLE_RATE }}
+          SYNC_ENABLE_REQUEST_LOGS: ${{ secrets.ENABLE_REQUEST_LOGS || vars.ENABLE_REQUEST_LOGS }}
+          SYNC_REQUEST_LOGS_MAX_ENTRIES: ${{ secrets.REQUEST_LOGS_MAX_ENTRIES || vars.REQUEST_LOGS_MAX_ENTRIES }}
+          SYNC_CORS_ORIGINS: ${{ secrets.CORS_ORIGINS || vars.CORS_ORIGINS }}
+          SYNC_DEPLOY_URL: ${{ secrets.DEPLOY_URL || vars.DEPLOY_URL }}
+        run: |
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}"
+          export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
+          # 动态遍历环境变量中所有以 SYNC_ 开头的变量并推送到 CF Pages
+          for var_name in $(env | grep -oE '^SYNC_[A-Z0-9_]+' | sort -u); do
+            target_name="${var_name#SYNC_}"
+            val="${!var_name}"
+            if [ -n "$val" ]; then
+              echo "Syncing $target_name..."
+              echo "$val" | pnpm exec wrangler pages secret put "$target_name" --project-name=ai-relay
+            fi
+          done
