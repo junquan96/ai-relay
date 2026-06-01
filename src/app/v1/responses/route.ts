@@ -29,6 +29,10 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
+function estimateTokensFromChars(charCount: number): number {
+  return Math.ceil(charCount / CHARS_PER_TOKEN);
+}
+
 /**
  * Extract output text from a Responses API response for token estimation.
  */
@@ -111,7 +115,7 @@ function wrapStreamWithUsageTracking(
   const decoder = new TextDecoder();
   let buffer = '';
   let lastUsage: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number } | null = null;
-  let accumulatedContent = '';
+  let accumulatedContentChars = 0;
   let recorded = false;
 
   async function recordUsage(promptTokens: number, completionTokens: number): Promise<void> {
@@ -182,9 +186,8 @@ function wrapStreamWithUsageTracking(
             const prompt = lastUsage.prompt_tokens ?? lastUsage.input_tokens ?? requestPromptTokens;
             const completion = lastUsage.completion_tokens ?? lastUsage.output_tokens ?? 0;
             await recordUsage(prompt, completion);
-          } else if (accumulatedContent) {
-            const estimatedCompletion = estimateTokens(accumulatedContent);
-            await recordUsage(requestPromptTokens, estimatedCompletion);
+          } else if (accumulatedContentChars > 0) {
+            await recordUsage(requestPromptTokens, estimateTokensFromChars(accumulatedContentChars));
           }
         } catch (e) {
           console.error('[Usage] streaming recordUsage failed:', e);
@@ -217,7 +220,7 @@ function wrapStreamWithUsageTracking(
 
             // Accumulate content from output text deltas
             if (parsed.type === 'response.output_text.delta' && typeof parsed.delta === 'string') {
-              accumulatedContent += parsed.delta;
+              accumulatedContentChars += parsed.delta.length;
             }
 
             // Also handle response.completed which may have final usage

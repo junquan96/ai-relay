@@ -35,6 +35,10 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / CHARS_PER_TOKEN));
 }
 
+function estimateTokensFromChars(charCount: number): number {
+  return Math.max(1, Math.ceil(charCount / CHARS_PER_TOKEN));
+}
+
 function contentToText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -77,7 +81,7 @@ function wrapAnthropicStreamWithUsageTracking(
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let accumulatedContent = '';
+  let accumulatedContentChars = 0;
   let lastUsage: { input_tokens?: number; output_tokens?: number } | null = null;
   let recorded = false;
 
@@ -119,8 +123,8 @@ function wrapAnthropicStreamWithUsageTracking(
         try {
           if (lastUsage) {
             await recordUsage(lastUsage.input_tokens ?? requestPromptTokens, lastUsage.output_tokens ?? 0);
-          } else if (accumulatedContent) {
-            await recordUsage(requestPromptTokens, estimateTokens(accumulatedContent));
+          } else if (accumulatedContentChars > 0) {
+            await recordUsage(requestPromptTokens, estimateTokensFromChars(accumulatedContentChars));
           }
         } catch (error) {
           console.error('[Usage] anthropic stream recordUsage failed:', error);
@@ -153,7 +157,7 @@ function wrapAnthropicStreamWithUsageTracking(
             };
           }
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            accumulatedContent += parsed.delta.text;
+            accumulatedContentChars += parsed.delta.text.length;
           }
         } catch {
           // Ignore non-JSON SSE payloads.

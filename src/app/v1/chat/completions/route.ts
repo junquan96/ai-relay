@@ -31,6 +31,10 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
+function estimateTokensFromChars(charCount: number): number {
+  return Math.ceil(charCount / CHARS_PER_TOKEN);
+}
+
 /**
  * Wrap a streaming SSE response to intercept and track token usage.
  *
@@ -51,7 +55,7 @@ function wrapStreamWithUsageTracking(
   const decoder = new TextDecoder();
   let buffer = '';
   let lastUsage: { prompt_tokens?: number; completion_tokens?: number } | null = null;
-  let accumulatedContent = '';
+  let accumulatedContentChars = 0;
   let recorded = false;
 
   async function recordUsage(promptTokens: number, completionTokens: number): Promise<void> {
@@ -92,10 +96,9 @@ function wrapStreamWithUsageTracking(
         // Stream ended — record usage
         if (lastUsage) {
           await recordUsage(lastUsage.prompt_tokens || 0, lastUsage.completion_tokens || 0);
-        } else if (accumulatedContent) {
-          // Fallback: estimate tokens from accumulated content
-          const estimatedCompletion = estimateTokens(accumulatedContent);
-          await recordUsage(requestPromptTokens, estimatedCompletion);
+        } else if (accumulatedContentChars > 0) {
+          // Fallback: estimate tokens from accumulated content length.
+          await recordUsage(requestPromptTokens, estimateTokensFromChars(accumulatedContentChars));
         }
         controller.close();
         return;
@@ -124,38 +127,30 @@ function wrapStreamWithUsageTracking(
             // Accumulate content for fallback estimation
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
-              accumulatedContent += content;
+              accumulatedContentChars += content.length;
+            }
+
+            if (providerName === 'anthropic') {
+              if (parsed.type === 'message_delta' && parsed.usage) {
+                lastUsage = {
+                  prompt_tokens: parsed.usage.input_tokens || 0,
+                  completion_tokens: parsed.usage.output_tokens || 0,
+                };
+              }
+              // Anthropic content_block_delta
+              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                accumulatedContentChars += parsed.delta.text.length;
+              }
             }
           } catch {
             // Not valid JSON, skip
           }
         }
 
-        // Anthropic format: `event: message_delta` followed by `data: {...}`
-        if (trimmed.startsWith('event: message_delta')) {
-          // Next data line should have usage
-          // We'll catch it in the data parsing above
-        }
-
-        // Anthropic usage in message_delta data
-        if (trimmed.startsWith('data: ') && providerName === 'anthropic') {
-          try {
-            const parsed = JSON.parse(trimmed.slice(6));
-            if (parsed.type === 'message_delta' && parsed.usage) {
-              lastUsage = {
-                prompt_tokens: parsed.usage.input_tokens || 0,
-                completion_tokens: parsed.usage.output_tokens || 0,
-              };
-            }
-            // Anthropic content_block_delta
-            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-              accumulatedContent += parsed.delta.text;
-            }
-          } catch {
-            // skip
-          }
-        }
       }
+    },
+    cancel() {
+      reader.cancel().catch(() => {});
     },
   });
 }
