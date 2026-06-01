@@ -87,20 +87,19 @@ jobs:
           echo ""
           echo "=== Provisioning KV namespace ==="
 
-          KV_LIST=$(pnpm exec wrangler kv namespace list --json 2>/dev/null || echo "[]")
+          # 不使用 --json，避免兼容性问题
+          KV_LIST=$(pnpm exec wrangler kv namespace list 2>/dev/null || echo "")
 
-          echo "KV list output:"
-          echo "$KV_LIST"
+          echo "KV list output (first 15 lines):"
+          echo "$KV_LIST" | head -15
 
           KV_ID=""
 
-          # 兼容历史 title
-          for TITLE in "KV" "ai-relay-KV" "ai-relay" "ai-relay-ai-relay"; do
-            FOUND=$(echo "$KV_LIST" \
-              | jq -r ".[] | select(.title == \"${TITLE}\") | .id" \
-              | head -n1)
-
-            if [ -n "$FOUND" ] && [ "$FOUND" != "null" ]; then
+          # 尝试常见 title 格式
+          for TITLE in "KV" "ai-relay-KV" "ai-relay"; do
+            # 从文本输出中提取 32 位 ID
+            FOUND=$(echo "$KV_LIST" | grep -A 5 -B 5 "title.*${TITLE}" | grep -oE '[0-9a-f]{32}' | head -n1 || echo "")
+            if [ -n "$FOUND" ]; then
               KV_ID="$FOUND"
               echo "Found existing KV namespace: title=${TITLE}, id=${KV_ID}"
               break
@@ -108,25 +107,16 @@ jobs:
           done
 
           if [ -z "$KV_ID" ]; then
-            echo "Creating KV namespace: KV"
+            echo "No existing KV namespace found, creating one..."
+            CREATE_OUTPUT=$(pnpm exec wrangler kv namespace create KV 2>&1)
+            echo "$CREATE_OUTPUT"
 
-            KV_OUTPUT=$(pnpm exec wrangler kv namespace create KV 2>&1 || true)
-            echo "$KV_OUTPUT"
-
-            KV_ID=$(echo "$KV_OUTPUT" \
-              | sed -nE 's/.*id[[:space:]"=:]*"([^"]+)".*/\1/p' \
-              | head -n1)
-
-            if [ -z "$KV_ID" ]; then
-              KV_ID=$(echo "$KV_OUTPUT" \
-                | grep -oE '[0-9a-f]{32}' \
-                | head -1 || true)
-            fi
+            KV_ID=$(echo "$CREATE_OUTPUT" | grep -oE '[0-9a-f]{32}' | head -n1 || echo "")
           fi
 
           echo "KV namespace id: $KV_ID"
 
-          if [ -z "$KV_ID" ] || [ "$KV_ID" = "null" ]; then
+          if [ -z "$KV_ID" ]; then
             echo "❌ Failed to obtain KV namespace id"
             exit 1
           fi
