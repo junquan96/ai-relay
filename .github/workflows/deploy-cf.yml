@@ -55,22 +55,31 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-
-          # ─── D1 Database ───────────────────────────────────────────
+      
           echo "=== Provisioning D1 database ==="
-          DATABASE_ID=$(pnpm exec wrangler d1 list --json | jq -r '.[] | select(.name == "ai-relay") | .uuid' || echo "")
 
+          # 检查数据库是否已存在
+          DATABASE_ID=$(pnpm exec wrangler d1 list --json 2>/dev/null \
+            | jq -r '.[] | select(.name == "ai-relay") | .uuid' || true)
+      
           if [ -z "$DATABASE_ID" ] || [ "$DATABASE_ID" = "null" ]; then
             echo "Creating D1 database: ai-relay"
-            DATABASE_ID=$(pnpm exec wrangler d1 create ai-relay --json | jq -r '.uuid')
+      
+            CREATE_OUTPUT=$(pnpm exec wrangler d1 create ai-relay)
+            echo "$CREATE_OUTPUT"
+      
+            # 提取 database_id（兼容文本和 JSON 输出）
+            DATABASE_ID=$(echo "$CREATE_OUTPUT" \
+              | sed -nE 's/.*database_id[[:space:]"=:]*"([^"]+)".*/\1/p' \
+              | head -n1)
           else
             echo "D1 database already exists"
           fi
-
+      
           echo "D1 database_id: $DATABASE_ID"
-
-          if [ -z "$DATABASE_ID" ] || [ "$DATABASE_ID" = "null" ]; then
-            echo "❌ Failed to obtain D1 database_id"
+      
+          if [ -z "$DATABASE_ID" ]; then
+            echo "❌ Failed to get D1 database_id"
             exit 1
           fi
 
